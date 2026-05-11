@@ -1,19 +1,14 @@
 import { useState } from "react";
-import { parseMixedQuizText } from "../utils/quizParser";
+import { parseSeparatedQuizTexts } from "../utils/quizParser";
 
 function TeacherPage({ onQuizGenerated, onGoToStudent }) {
-  const [quizText, setQuizText] = useState("");
+  const [titleText, setTitleText] = useState("");
+  const [mcqText, setMcqText] = useState("");
+  const [structuredText, setStructuredText] = useState("");
+  const [essayText, setEssayText] = useState("");
   const [generatedQuiz, setGeneratedQuiz] = useState(null);
 
-  const sampleText = `TITLE:
-Distributed Systems Mixed Practice Quiz
-
----
-
-TYPE:
-MCQ
-
-QUESTION:
+  const mcqSample = `QUESTION:
 Which statements correctly describe TCP sockets?
 
 OPTIONS:
@@ -31,10 +26,23 @@ TCP provides reliable, ordered, connection-oriented, and bidirectional communica
 
 ---
 
-TYPE:
-STRUCTURED
+QUESTION:
+Which statements correctly describe UDP sockets?
 
-SCENARIO:
+OPTIONS:
+A. Connectionless communication
+B. No guaranteed ordering
+C. Reliable delivery by default
+D. Destination is included with each packet
+E. Useful for streaming or broadcasting
+
+ANSWER:
+A, B, D, E
+
+EXPLANATION:
+UDP is connectionless and does not guarantee reliability or ordering. It is useful when speed is more important than guaranteed delivery.`;
+
+  const structuredSample = `SCENARIO:
 An online banking system uses multiple servers. If one server fails, users should still be able to check balances and make payments.
 
 QUESTION:
@@ -48,14 +56,9 @@ b) Replication is useful because backup servers can continue service if one serv
 c) Data consistency is a risk because replicated servers must maintain correct and updated account data.
 
 EXPLANATION:
-The scenario focuses on continuing service despite server failure. A strong answer should mention fault tolerance, availability, replication, and consistency.
+The scenario focuses on continuing service despite server failure. A strong answer should mention fault tolerance, availability, replication, and consistency.`;
 
----
-
-TYPE:
-ESSAY
-
-QUESTION:
+  const essaySample = `QUESTION:
 Explain the difference between client-server architecture and peer-to-peer architecture.
 
 ANSWER:
@@ -69,19 +72,37 @@ EXPLANATION:
 A strong essay should define both architectures, compare control, scalability, failure points, and give suitable use cases.`;
 
   function handleGenerateQuiz() {
-    const quiz = parseMixedQuizText(quizText);
+    const quiz = parseSeparatedQuizTexts({
+      titleText,
+      mcqText,
+      structuredText,
+      essayText
+    });
 
     if (quiz.questions.length === 0) {
-      alert("Please paste valid quiz content first.");
+      alert("Please add at least one MCQ, structured question, or essay question.");
       return;
     }
 
-    const invalidQuestions = quiz.questions.filter(
-      question => !question.type || question.type === "UNKNOWN" || !question.question
-    );
+    const invalidQuestions = quiz.questions.filter(question => {
+      if (!question.question || !question.answer || !question.explanation) {
+        return true;
+      }
+
+      if (question.type === "MCQ") {
+        return (
+          Object.keys(question.options).length === 0 ||
+          question.correctAnswers.length === 0
+        );
+      }
+
+      return false;
+    });
 
     if (invalidQuestions.length > 0) {
-      alert("Some questions have invalid format. Please check TYPE and QUESTION sections.");
+      alert(
+        "Some questions have invalid format. Please check that every question has QUESTION, ANSWER, and EXPLANATION. MCQs also need OPTIONS."
+      );
       return;
     }
 
@@ -121,7 +142,24 @@ A strong essay should define both architectures, compare control, scalability, f
   }
 
   function loadSample() {
-    setQuizText(sampleText);
+    setTitleText("Distributed Systems Mixed Practice Quiz");
+    setMcqText(mcqSample);
+    setStructuredText(structuredSample);
+    setEssayText(essaySample);
+  }
+
+  function clearAll() {
+    const shouldClear = window.confirm("Are you sure you want to clear all inputs?");
+
+    if (!shouldClear) {
+      return;
+    }
+
+    setTitleText("");
+    setMcqText("");
+    setStructuredText("");
+    setEssayText("");
+    setGeneratedQuiz(null);
   }
 
   return (
@@ -129,88 +167,74 @@ A strong essay should define both architectures, compare control, scalability, f
       <h1>Teacher Quiz Generator</h1>
 
       <p className="description">
-        Paste MCQs, structured questions, and essay questions in the required format.
-        Then generate the quiz and export it as a JSON file for students.
+        Add MCQs, structured questions, and essay questions in separate sections.
+        This makes it easier to manage large question sets.
       </p>
 
       <div className="format-box">
-        <h3>Supported Question Types</h3>
-        <p><strong>MCQ:</strong> Students select one or more answers.</p>
-        <p><strong>STRUCTURED:</strong> Students type a short/medium answer and compare with the sample answer.</p>
-        <p><strong>ESSAY:</strong> Students type a long answer and compare with the sample essay answer.</p>
-      </div>
-
-      <div className="format-box">
-        <h3>Required Format</h3>
-        <pre>{`TITLE:
-Your Quiz Title
-
----
-
-TYPE:
-MCQ
-
-QUESTION:
-Your MCQ question here?
-
-OPTIONS:
-A. Option one
-B. Option two
-C. Option three
-D. Option four
-E. Option five
-
-ANSWER:
-A, C
-
-EXPLANATION:
-Explanation for the answer.
-
----
-
-TYPE:
-STRUCTURED
-
-SCENARIO:
-Optional scenario here.
-
-QUESTION:
-a) First sub question
-b) Second sub question
-
-ANSWER:
-Sample structured answer here.
-
-EXPLANATION:
-Explanation or marking points here.
-
----
-
-TYPE:
-ESSAY
-
-QUESTION:
-Essay question here.
-
-ANSWER:
-Sample essay answer here.
-
-EXPLANATION:
-Explanation or key points here.`}</pre>
+        <h3>How to Use</h3>
+        <p><strong>MCQs:</strong> Add options and correct letters.</p>
+        <p><strong>Structured:</strong> Add scenario if needed, question, sample answer, and explanation.</p>
+        <p><strong>Essay:</strong> Add essay question, sample answer, and key points.</p>
+        <p>Use <strong>---</strong> between questions inside each section.</p>
       </div>
 
       <div className="button-row">
         <button onClick={loadSample}>Load Sample</button>
+        <button onClick={clearAll}>Clear All</button>
         <button onClick={onGoToStudent}>Go to Student Quiz</button>
       </div>
 
-      <label className="input-label">Quiz Content</label>
-      <textarea
-        value={quizText}
-        onChange={(e) => setQuizText(e.target.value)}
-        placeholder="Paste your full quiz content here..."
-        rows="26"
+      <label className="input-label">Quiz Title</label>
+      <input
+        className="title-input"
+        type="text"
+        value={titleText}
+        onChange={(e) => setTitleText(e.target.value)}
+        placeholder="Enter quiz title..."
       />
+
+      <div className="section-card">
+        <h2>MCQ Questions</h2>
+        <p className="small-note">
+          Format: QUESTION, OPTIONS, ANSWER, EXPLANATION. Use --- between MCQs.
+        </p>
+
+        <textarea
+          value={mcqText}
+          onChange={(e) => setMcqText(e.target.value)}
+          placeholder="Paste MCQ questions here..."
+          rows="18"
+        />
+      </div>
+
+      <div className="section-card">
+        <h2>Structured Questions</h2>
+        <p className="small-note">
+          Format: optional SCENARIO, QUESTION, ANSWER, EXPLANATION. Use --- between questions.
+        </p>
+
+        <textarea
+          value={structuredText}
+          onChange={(e) => setStructuredText(e.target.value)}
+          placeholder="Paste structured questions here..."
+          rows="18"
+        />
+      </div>
+
+      <div className="section-card">
+        <h2>Essay Questions</h2>
+        <p className="small-note">
+          Format: QUESTION, ANSWER, EXPLANATION. Use --- between essays.
+        </p>
+
+        <textarea
+          value={essayText}
+          onChange={(e) => setEssayText(e.target.value)}
+          placeholder="Paste essay questions here..."
+          rows="18"
+        />
+      </div>
 
       <div className="button-row">
         <button className="main-button" onClick={handleGenerateQuiz}>

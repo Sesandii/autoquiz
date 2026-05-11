@@ -249,3 +249,79 @@ button:hover {
 .import-button:hover {
   background-color: #6d28d9;
 }
+
+.title-input {
+  width: 100%;
+  margin-top: 10px;
+  padding: 13px 15px;
+  font-size: 16px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
+}
+
+.section-card {
+  margin-top: 25px;
+  padding: 20px;
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.section-card h2 {
+  margin-top: 0;
+}
+
+.category-tabs {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 25px;
+  margin-bottom: 20px;
+}
+
+.category-tab {
+  background-color: #e5e7eb;
+  color: #111827;
+  font-weight: bold;
+}
+
+.category-tab:hover {
+  background-color: #d1d5db;
+}
+
+.category-tab:disabled {
+  background-color: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.active-tab {
+  background-color: #2563eb;
+  color: white;
+}
+
+.active-tab:hover {
+  background-color: #1d4ed8;
+}
+
+.category-heading-box {
+  margin-top: 20px;
+  padding: 18px;
+  border-radius: 12px;
+  background-color: #eff6ff;
+  border-left: 5px solid #2563eb;
+}
+
+.category-heading-box h2 {
+  margin-top: 0;
+}
+
+.empty-category-box {
+  margin-top: 20px;
+  padding: 18px;
+  border-radius: 10px;
+  background-color: #f9fafb;
+  border: 1px dashed #d1d5db;
+  color: #6b7280;
+}

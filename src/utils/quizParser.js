@@ -1,28 +1,45 @@
-export function parseMixedQuizText(inputText) {
-  if (!inputText || inputText.trim() === "") {
-    return {
-      title: "Untitled Quiz",
-      questions: []
-    };
+export function parseSeparatedQuizTexts({
+  titleText,
+  mcqText,
+  structuredText,
+  essayText
+}) {
+  const title = titleText && titleText.trim()
+    ? titleText.trim()
+    : "Untitled Quiz";
+
+  const mcqQuestions = parseQuestionGroup(mcqText, "MCQ");
+  const structuredQuestions = parseQuestionGroup(structuredText, "STRUCTURED");
+  const essayQuestions = parseQuestionGroup(essayText, "ESSAY");
+
+  const questions = [
+    ...mcqQuestions,
+    ...structuredQuestions,
+    ...essayQuestions
+  ].map((question, index) => ({
+    ...question,
+    id: index + 1
+  }));
+
+  return {
+    title,
+    questions
+  };
+}
+
+function parseQuestionGroup(text, type) {
+  if (!text || text.trim() === "") {
+    return [];
   }
 
-  const normalizedText = inputText.replace(/\r\n/g, "\n");
-  const title = extractTitle(normalizedText);
+  const normalizedText = text.replace(/\r\n/g, "\n");
 
-  const questionBlocks = normalizedText
-    .split(/\n(?=TYPE:\s*\n)/i)
+  const blocks = normalizedText
+    .split(/\n-{3,}\n/)
     .map(block => block.trim())
-    .filter(block => /^TYPE:\s*\n/i.test(block));
+    .filter(block => block.includes("QUESTION:"));
 
-  const questions = questionBlocks.map((block, index) => {
-    const type = extractSectionBetween(block, "TYPE", [
-      "SCENARIO",
-      "QUESTION",
-      "OPTIONS",
-      "ANSWER",
-      "EXPLANATION"
-    ]).toUpperCase();
-
+  return blocks.map(block => {
     const scenario = extractSectionBetween(block, "SCENARIO", [
       "QUESTION",
       "OPTIONS",
@@ -40,9 +57,7 @@ export function parseMixedQuizText(inputText) {
       "EXPLANATION"
     ]);
 
-    const explanation = extractSectionBetween(block, "EXPLANATION", [
-      "TYPE"
-    ]);
+    const explanation = extractSectionBetween(block, "EXPLANATION", []);
 
     if (type === "MCQ") {
       const optionsText = extractSectionBetween(block, "OPTIONS", [
@@ -58,7 +73,7 @@ export function parseMixedQuizText(inputText) {
         .filter(item => /^[A-Z]$/.test(item));
 
       return {
-        id: index + 1,
+        id: 0,
         type: "MCQ",
         scenario,
         question,
@@ -69,22 +84,9 @@ export function parseMixedQuizText(inputText) {
       };
     }
 
-    if (type === "STRUCTURED" || type === "ESSAY") {
-      return {
-        id: index + 1,
-        type,
-        scenario,
-        question,
-        options: {},
-        correctAnswers: [],
-        answer,
-        explanation
-      };
-    }
-
     return {
-      id: index + 1,
-      type: "UNKNOWN",
+      id: 0,
+      type,
       scenario,
       question,
       options: {},
@@ -93,39 +95,21 @@ export function parseMixedQuizText(inputText) {
       explanation
     };
   });
-
-  return {
-    title,
-    questions
-  };
-}
-
-function extractTitle(text) {
-  const titleMatch = text.match(/TITLE:\s*([\s\S]*?)(?=\n---|\nTYPE:|$)/i);
-
-  if (titleMatch && titleMatch[1].trim()) {
-    return titleMatch[1].trim();
-  }
-
-  const firstNonEmptyLine = text
-    .split("\n")
-    .map(line => line.trim())
-    .find(line => line !== "" && !line.startsWith("---"));
-
-  if (!firstNonEmptyLine || /^TYPE:/i.test(firstNonEmptyLine)) {
-    return "Untitled Quiz";
-  }
-
-  return firstNonEmptyLine;
 }
 
 function extractSectionBetween(block, sectionName, nextSectionNames) {
-  const nextPattern = nextSectionNames.join("|");
+  let regex;
 
-  const regex = new RegExp(
-    `${sectionName}:\\s*([\\s\\S]*?)(?=\\n(?:${nextPattern}):|$)`,
-    "i"
-  );
+  if (nextSectionNames.length === 0) {
+    regex = new RegExp(`${sectionName}:\\s*([\\s\\S]*)`, "i");
+  } else {
+    const nextPattern = nextSectionNames.join("|");
+
+    regex = new RegExp(
+      `${sectionName}:\\s*([\\s\\S]*?)(?=\\n(?:${nextPattern}):|$)`,
+      "i"
+    );
+  }
 
   const match = block.match(regex);
 

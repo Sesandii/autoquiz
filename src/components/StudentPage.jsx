@@ -6,6 +6,7 @@ function StudentPage({ quiz, onBackToTeacher, onQuizImported }) {
   const [writtenAnswers, setWrittenAnswers] = useState({});
   const [checkedQuestions, setCheckedQuestions] = useState({});
   const [showFinalScore, setShowFinalScore] = useState(false);
+  const [activeCategory, setActiveCategory] = useState("MCQ");
 
   function handleToggleAnswer(questionId, answer) {
     const currentAnswers = selectedAnswers[questionId] || [];
@@ -84,6 +85,14 @@ function StudentPage({ quiz, onBackToTeacher, onQuizImported }) {
     return quiz.questions.filter(question => question.type === "MCQ").length;
   }
 
+  function calculateStructuredCount() {
+    return quiz.questions.filter(question => question.type === "STRUCTURED").length;
+  }
+
+  function calculateEssayCount() {
+    return quiz.questions.filter(question => question.type === "ESSAY").length;
+  }
+
   function calculateAttemptedQuestions() {
     return quiz.questions.filter(question => {
       if (question.type === "MCQ") {
@@ -94,12 +103,24 @@ function StudentPage({ quiz, onBackToTeacher, onQuizImported }) {
     }).length;
   }
 
-  function calculateStructuredCount() {
-    return quiz.questions.filter(question => question.type === "STRUCTURED").length;
+  function getQuestionsByCategory(category) {
+    return quiz.questions.filter(question => question.type === category);
   }
 
-  function calculateEssayCount() {
-    return quiz.questions.filter(question => question.type === "ESSAY").length;
+  function getCategoryLabel(category) {
+    if (category === "MCQ") {
+      return "MCQ Questions";
+    }
+
+    if (category === "STRUCTURED") {
+      return "Structured Questions";
+    }
+
+    if (category === "ESSAY") {
+      return "Essay Questions";
+    }
+
+    return "Questions";
   }
 
   function resetAttempt() {
@@ -130,6 +151,10 @@ function StudentPage({ quiz, onBackToTeacher, onQuizImported }) {
         localStorage.setItem("generatedQuiz", JSON.stringify(importedQuiz));
         onQuizImported(importedQuiz);
         resetAttempt();
+
+        const firstAvailableCategory = getFirstAvailableCategory(importedQuiz);
+        setActiveCategory(firstAvailableCategory);
+
         alert("Quiz imported successfully!");
       } catch (error) {
         alert("Could not read this file. Please select a valid JSON quiz file.");
@@ -145,7 +170,7 @@ function StudentPage({ quiz, onBackToTeacher, onQuizImported }) {
         <h1>No Quiz Loaded</h1>
 
         <p className="description">
-          Import a quiz JSON file to start answering questions.
+          Import one quiz JSON file to start answering questions.
         </p>
 
         <label className="import-button">
@@ -163,13 +188,19 @@ function StudentPage({ quiz, onBackToTeacher, onQuizImported }) {
     );
   }
 
+  const mcqCount = calculateTotalMCQs();
+  const structuredCount = calculateStructuredCount();
+  const essayCount = calculateEssayCount();
+
+  const filteredQuestions = getQuestionsByCategory(activeCategory);
+
   return (
     <div className="page">
       <h1>{quiz.title}</h1>
 
       <p className="description">
-        This quiz may include MCQs, structured questions, and essay questions.
-        MCQs are automatically checked. Structured and essay answers are for self-review using the sample answer.
+        Import one JSON file and practise questions by category. Choose MCQs,
+        structured questions, or essay questions below.
       </p>
 
       <div className="button-row">
@@ -189,13 +220,67 @@ function StudentPage({ quiz, onBackToTeacher, onQuizImported }) {
 
       <div className="quiz-summary">
         <p>Total Questions: {quiz.questions.length}</p>
-        <p>MCQs: {calculateTotalMCQs()}</p>
-        <p>Structured: {calculateStructuredCount()}</p>
-        <p>Essay: {calculateEssayCount()}</p>
+        <p>MCQs: {mcqCount}</p>
+        <p>Structured: {structuredCount}</p>
+        <p>Essay: {essayCount}</p>
         <p>Attempted: {calculateAttemptedQuestions()}</p>
       </div>
 
-      {quiz.questions.map((question, index) => (
+      <div className="category-tabs">
+        <button
+          className={activeCategory === "MCQ" ? "category-tab active-tab" : "category-tab"}
+          onClick={() => setActiveCategory("MCQ")}
+          disabled={mcqCount === 0}
+        >
+          MCQ Questions ({mcqCount})
+        </button>
+
+        <button
+          className={activeCategory === "STRUCTURED" ? "category-tab active-tab" : "category-tab"}
+          onClick={() => setActiveCategory("STRUCTURED")}
+          disabled={structuredCount === 0}
+        >
+          Structured Questions ({structuredCount})
+        </button>
+
+        <button
+          className={activeCategory === "ESSAY" ? "category-tab active-tab" : "category-tab"}
+          onClick={() => setActiveCategory("ESSAY")}
+          disabled={essayCount === 0}
+        >
+          Essay Questions ({essayCount})
+        </button>
+      </div>
+
+      <div className="category-heading-box">
+        <h2>{getCategoryLabel(activeCategory)}</h2>
+
+        {activeCategory === "MCQ" && (
+          <p>
+            Select all correct answers. MCQs are automatically checked and included in the score.
+          </p>
+        )}
+
+        {activeCategory === "STRUCTURED" && (
+          <p>
+            Write your answer, then compare it with the sample answer and explanation.
+          </p>
+        )}
+
+        {activeCategory === "ESSAY" && (
+          <p>
+            Write your essay answer, then compare it with the sample essay answer and key points.
+          </p>
+        )}
+      </div>
+
+      {filteredQuestions.length === 0 && (
+        <div className="empty-category-box">
+          <p>No questions available in this category.</p>
+        </div>
+      )}
+
+      {filteredQuestions.map((question, index) => (
         <QuizQuestion
           key={question.id}
           question={question}
@@ -220,8 +305,7 @@ function StudentPage({ quiz, onBackToTeacher, onQuizImported }) {
           </h2>
 
           <p>
-            Structured and essay questions are not automatically marked.
-            Compare your answer with the sample answer and explanation.
+            Structured and essay questions are for self-review using the sample answers.
           </p>
 
           <p>
@@ -265,6 +349,26 @@ function isValidQuiz(quiz) {
       typeof question.explanation === "string"
     )
   );
+}
+
+function getFirstAvailableCategory(quiz) {
+  const hasMCQs = quiz.questions.some(question => question.type === "MCQ");
+  const hasStructured = quiz.questions.some(question => question.type === "STRUCTURED");
+  const hasEssay = quiz.questions.some(question => question.type === "ESSAY");
+
+  if (hasMCQs) {
+    return "MCQ";
+  }
+
+  if (hasStructured) {
+    return "STRUCTURED";
+  }
+
+  if (hasEssay) {
+    return "ESSAY";
+  }
+
+  return "MCQ";
 }
 
 export default StudentPage;
