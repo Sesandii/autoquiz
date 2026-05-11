@@ -1,45 +1,96 @@
-export function parseQuizFromSeparateTexts(questionText, explanationText) {
-  if (!questionText || questionText.trim() === "") {
+export function parseMixedQuizText(inputText) {
+  if (!inputText || inputText.trim() === "") {
     return {
       title: "Untitled Quiz",
       questions: []
     };
   }
 
-  const title = extractTitle(questionText);
-  const answerKey = extractAnswerKey(questionText);
-  const questionsOnlyText = questionText.split(/Answer Key/i)[0];
+  const normalizedText = inputText.replace(/\r\n/g, "\n");
+  const title = extractTitle(normalizedText);
 
-  const questionBlocks = questionsOnlyText
-    .split(/\n(?=\d+\.\s)/)
+  const questionBlocks = normalizedText
+    .split(/\n(?=TYPE:\s*\n)/i)
     .map(block => block.trim())
-    .filter(block => /^\d+\.\s/.test(block));
-
-  const explanations = extractExplanations(explanationText);
+    .filter(block => /^TYPE:\s*\n/i.test(block));
 
   const questions = questionBlocks.map((block, index) => {
-    const questionNumber = index + 1;
+    const type = extractSectionBetween(block, "TYPE", [
+      "SCENARIO",
+      "QUESTION",
+      "OPTIONS",
+      "ANSWER",
+      "EXPLANATION"
+    ]).toUpperCase();
 
-    const questionMatch = block.match(/^\d+\.\s*([\s\S]*?)(?=\nA\.)/i);
+    const scenario = extractSectionBetween(block, "SCENARIO", [
+      "QUESTION",
+      "OPTIONS",
+      "ANSWER",
+      "EXPLANATION"
+    ]);
 
-    const optionAMatch = block.match(/\nA\.\s*([\s\S]*?)(?=\nB\.)/i);
-    const optionBMatch = block.match(/\nB\.\s*([\s\S]*?)(?=\nC\.)/i);
-    const optionCMatch = block.match(/\nC\.\s*([\s\S]*?)(?=\nD\.)/i);
-    const optionDMatch = block.match(/\nD\.\s*([\s\S]*?)(?=\nE\.)/i);
-    const optionEMatch = block.match(/\nE\.\s*([\s\S]*)/i);
+    const question = extractSectionBetween(block, "QUESTION", [
+      "OPTIONS",
+      "ANSWER",
+      "EXPLANATION"
+    ]);
+
+    const answer = extractSectionBetween(block, "ANSWER", [
+      "EXPLANATION"
+    ]);
+
+    const explanation = extractSectionBetween(block, "EXPLANATION", [
+      "TYPE"
+    ]);
+
+    if (type === "MCQ") {
+      const optionsText = extractSectionBetween(block, "OPTIONS", [
+        "ANSWER",
+        "EXPLANATION"
+      ]);
+
+      const options = extractOptions(optionsText);
+
+      const correctAnswers = answer
+        .split(",")
+        .map(item => item.trim().toUpperCase())
+        .filter(item => /^[A-Z]$/.test(item));
+
+      return {
+        id: index + 1,
+        type: "MCQ",
+        scenario,
+        question,
+        options,
+        correctAnswers,
+        answer,
+        explanation
+      };
+    }
+
+    if (type === "STRUCTURED" || type === "ESSAY") {
+      return {
+        id: index + 1,
+        type,
+        scenario,
+        question,
+        options: {},
+        correctAnswers: [],
+        answer,
+        explanation
+      };
+    }
 
     return {
-      id: questionNumber,
-      question: questionMatch ? questionMatch[1].trim() : "",
-      options: {
-        A: optionAMatch ? optionAMatch[1].trim() : "",
-        B: optionBMatch ? optionBMatch[1].trim() : "",
-        C: optionCMatch ? optionCMatch[1].trim() : "",
-        D: optionDMatch ? optionDMatch[1].trim() : "",
-        E: optionEMatch ? optionEMatch[1].trim() : ""
-      },
-      correctAnswers: answerKey[index] || [],
-      explanation: explanations[questionNumber] || "No explanation provided."
+      id: index + 1,
+      type: "UNKNOWN",
+      scenario,
+      question,
+      options: {},
+      correctAnswers: [],
+      answer,
+      explanation
     };
   });
 
@@ -50,59 +101,54 @@ export function parseQuizFromSeparateTexts(questionText, explanationText) {
 }
 
 function extractTitle(text) {
-  const firstLine = text.split("\n").find(line => line.trim() !== "");
+  const titleMatch = text.match(/TITLE:\s*([\s\S]*?)(?=\n---|\nTYPE:|$)/i);
 
-  if (!firstLine) {
+  if (titleMatch && titleMatch[1].trim()) {
+    return titleMatch[1].trim();
+  }
+
+  const firstNonEmptyLine = text
+    .split("\n")
+    .map(line => line.trim())
+    .find(line => line !== "" && !line.startsWith("---"));
+
+  if (!firstNonEmptyLine || /^TYPE:/i.test(firstNonEmptyLine)) {
     return "Untitled Quiz";
   }
 
-  return firstLine.trim();
+  return firstNonEmptyLine;
 }
 
-function extractAnswerKey(text) {
-  const answerKeySection = text.split(/Answer Key/i)[1];
+function extractSectionBetween(block, sectionName, nextSectionNames) {
+  const nextPattern = nextSectionNames.join("|");
 
-  if (!answerKeySection) {
-    return [];
-  }
+  const regex = new RegExp(
+    `${sectionName}:\\s*([\\s\\S]*?)(?=\\n(?:${nextPattern}):|$)`,
+    "i"
+  );
 
-  return answerKeySection
-    .split("\n")
-    .map(line => line.trim())
-    .filter(line => /^[A-E](,\s*[A-E])*$/.test(line))
-    .map(line =>
-      line
-        .split(",")
-        .map(answer => answer.trim().toUpperCase())
-    );
+  const match = block.match(regex);
+
+  return match ? match[1].trim() : "";
 }
 
-function extractExplanations(text) {
-  const explanations = {};
+function extractOptions(optionsText) {
+  const options = {};
 
-  if (!text || text.trim() === "") {
-    return explanations;
+  if (!optionsText) {
+    return options;
   }
 
-  const blocks = text
-    .split(/\n(?=\d+\.\s*Answer:)/)
-    .map(block => block.trim())
-    .filter(block => /^\d+\.\s*Answer:/i.test(block));
+  const optionMatches = optionsText.matchAll(
+    /^([A-Z])\.\s*([\s\S]*?)(?=^\s*[A-Z]\.\s|\s*$)/gm
+  );
 
-  blocks.forEach(block => {
-    const numberMatch = block.match(/^(\d+)\.\s*Answer:/i);
-    const explanationMatch = block.match(/^(\d+)\.\s*Answer:\s*[A-E,\s]+\n\n([\s\S]*)/i);
+  for (const match of optionMatches) {
+    const letter = match[1].trim().toUpperCase();
+    const text = match[2].trim();
 
-    if (numberMatch) {
-      const questionNumber = Number(numberMatch[1]);
+    options[letter] = text;
+  }
 
-      const explanation = explanationMatch
-        ? explanationMatch[2].trim()
-        : block.replace(/^(\d+)\.\s*Answer:\s*[A-E,\s]+/i, "").trim();
-
-      explanations[questionNumber] = explanation;
-    }
-  });
-
-  return explanations;
+  return options;
 }
